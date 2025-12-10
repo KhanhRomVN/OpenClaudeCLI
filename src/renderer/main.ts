@@ -1,4 +1,5 @@
 import { parseMarkdown } from "./markdown.js";
+import { CLITerminal } from "./cli-terminal.js";
 
 // ============================================
 // TYPES & INTERFACES
@@ -84,6 +85,8 @@ interface ChatTab {
   isLoading: boolean;
   streamingElement: HTMLElement | null;
   pendingAttachments: UploadedAttachment[];
+  displayMode: "gui" | "cli";
+  terminal: CLITerminal | null;
 }
 
 interface StreamData {
@@ -228,10 +231,15 @@ function createTab(accountId: string, name?: string): ChatTab {
     isLoading: false,
     streamingElement: null,
     pendingAttachments: [],
+    displayMode: "gui",
+    terminal: null,
   };
 
   tabs.push(tab);
   activeTabId = tabId;
+
+  // Initialize terminal for this tab
+  initializeTerminal(tab);
 
   renderTabs();
   renderActiveTab();
@@ -240,6 +248,84 @@ function createTab(accountId: string, name?: string): ChatTab {
   updateModelSelector();
 
   return tab;
+}
+
+function initializeTerminal(tab: ChatTab): void {
+  const terminalContainer = $("terminal-container");
+  if (!terminalContainer) return;
+
+  // Clear existing terminal
+  terminalContainer.innerHTML = "";
+
+  // Create new terminal instance
+  const terminal = new CLITerminal(terminalContainer);
+  tab.terminal = terminal;
+
+  // Write welcome message
+  terminal.writeln(
+    "\x1b[1;36m╔═══════════════════════════════════════════════════════╗\x1b[0m"
+  );
+  terminal.writeln(
+    "\x1b[1;36m║\x1b[0m           \x1b[1;35mZenCLI Terminal - Open Claude\x1b[0m           \x1b[1;36m║\x1b[0m"
+  );
+  terminal.writeln(
+    "\x1b[1;36m╚═══════════════════════════════════════════════════════╝\x1b[0m"
+  );
+  terminal.writeln("");
+  terminal.writeln(
+    "\x1b[32mTerminal ready. Messages will sync with GUI.\x1b[0m"
+  );
+  terminal.writeln("");
+  terminal.write("\x1b[36m❯\x1b[0m ");
+
+  // Handle terminal input
+  let inputBuffer = "";
+  terminal.onInput((data) => {
+    // Handle special keys
+    if (data === "\r") {
+      // Enter
+      terminal.writeln("");
+      if (inputBuffer.trim()) {
+        // Send message from CLI
+        handleCLIMessage(tab, inputBuffer.trim());
+        inputBuffer = "";
+      }
+      terminal.write("\x1b[36m❯\x1b[0m ");
+    } else if (data === "\u007F") {
+      // Backspace
+      if (inputBuffer.length > 0) {
+        inputBuffer = inputBuffer.slice(0, -1);
+        terminal.write("\b \b");
+      }
+    } else if (data === "\u0003") {
+      // Ctrl+C
+      terminal.writeln("^C");
+      inputBuffer = "";
+      terminal.write("\x1b[36m❯\x1b[0m ");
+    } else {
+      // Regular character
+      inputBuffer += data;
+      terminal.write(data);
+    }
+  });
+}
+
+async function handleCLIMessage(tab: ChatTab, message: string): Promise<void> {
+  if (!tab.terminal) return;
+
+  // Display user message in terminal
+  tab.terminal.writeln(`\x1b[33mYou:\x1b[0m ${message}`);
+
+  // Add message to GUI
+  addMessage("user", message);
+
+  // Send message through existing sendMessage flow
+  const input = $("input") as HTMLTextAreaElement;
+  if (input) {
+    input.value = message;
+    await sendMessage();
+    input.value = "";
+  }
 }
 
 function switchTab(tabId: string) {
@@ -287,6 +373,32 @@ function updateTabName(tabId: string, name: string) {
   if (activeTabId === tabId) {
     updateInputBadge();
   }
+  saveTabs();
+}
+
+function toggleDisplayMode() {
+  const tab = getActiveTab();
+  if (!tab) return;
+
+  // Toggle mode
+  tab.displayMode = tab.displayMode === "gui" ? "cli" : "gui";
+
+  // Update chat container data attribute
+  const chatContainer = $("chat-container");
+  if (chatContainer) {
+    chatContainer.setAttribute("data-mode", tab.displayMode);
+  }
+
+  // Update toggle button appearance
+  const toggleBtn = $("toggle-mode-btn");
+  if (toggleBtn) {
+    if (tab.displayMode === "cli") {
+      toggleBtn.classList.add("mode-cli");
+    } else {
+      toggleBtn.classList.remove("mode-cli");
+    }
+  }
+
   saveTabs();
 }
 
@@ -348,8 +460,30 @@ function renderActiveTab() {
   const tab = getActiveTab();
   const messagesContainer = $("messages");
   const emptyState = $("empty-state");
+  const chatContainer = $("chat-container");
+  const terminalContainer = $("terminal-container");
 
   if (!messagesContainer || !emptyState) return;
+
+  // Update chat container mode
+  if (chatContainer && tab) {
+    chatContainer.setAttribute("data-mode", tab.displayMode);
+  }
+
+  // Update toggle button appearance
+  const toggleBtn = $("toggle-mode-btn");
+  if (toggleBtn && tab) {
+    if (tab.displayMode === "cli") {
+      toggleBtn.classList.add("mode-cli");
+    } else {
+      toggleBtn.classList.remove("mode-cli");
+    }
+  }
+
+  // Initialize terminal if not already done
+  if (tab && !tab.terminal && terminalContainer) {
+    initializeTerminal(tab);
+  }
 
   // Clear current messages
   messagesContainer.innerHTML = "";
@@ -664,6 +798,7 @@ function saveTabs() {
     conversationId: tab.conversationId,
     parentMessageUuid: tab.parentMessageUuid,
     model: tab.model,
+    displayMode: tab.displayMode,
   }));
 
   localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(tabsData));
@@ -689,6 +824,8 @@ async function restoreTabs() {
           isLoading: false,
           streamingElement: null,
           pendingAttachments: [],
+          displayMode: tabData.displayMode || "gui",
+          terminal: null,
         };
         tabs.push(tab);
       }
@@ -843,6 +980,42 @@ function setupEventListeners() {
     }
   });
 
+  // Toggle mode button
+  const toggleModeBtn = $("toggle-mode-btn");
+  toggleModeBtn?.addEventListener("click", () => {
+    toggleDisplayMode();
+  });
+
+  // Terminal toggle button
+  const terminalToggleBtn = $("terminal-toggle-btn");
+  const terminalWrapper = $("terminal-wrapper");
+  terminalToggleBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    terminalWrapper?.classList.toggle("collapsed");
+
+    // Resize terminal when expanded
+    if (!terminalWrapper?.classList.contains("collapsed")) {
+      const tab = getActiveTab();
+      if (tab?.terminal) {
+        setTimeout(() => tab.terminal?.resize(), 100);
+      }
+    }
+  });
+
+  // Terminal header click to toggle
+  const terminalHeader = document.querySelector(".terminal-header");
+  terminalHeader?.addEventListener("click", () => {
+    terminalWrapper?.classList.toggle("collapsed");
+
+    // Resize terminal when expanded
+    if (!terminalWrapper?.classList.contains("collapsed")) {
+      const tab = getActiveTab();
+      if (tab?.terminal) {
+        setTimeout(() => tab.terminal?.resize(), 100);
+      }
+    }
+  });
+
   // Login button
   const loginBtn = $("login-btn");
   loginBtn?.addEventListener("click", async () => {
@@ -870,6 +1043,14 @@ function setupEventListeners() {
       if (tab.id === activeTabId) {
         scrollToBottom();
       }
+
+      // Write to terminal if active tab
+      if (tab.id === activeTabId && tab.terminal) {
+        // Clear previous response line and write new one
+        tab.terminal.write(
+          `\r\x1b[K\x1b[32mClaude:\x1b[0m ${data.fullText.substring(0, 100)}...`
+        );
+      }
     }
   });
 
@@ -884,6 +1065,13 @@ function setupEventListeners() {
       const stopBtn = $("stop-btn");
       if (sendBtn) sendBtn.style.display = "flex";
       if (stopBtn) stopBtn.classList.remove("visible");
+
+      // Write complete response to terminal
+      if (tab.terminal) {
+        tab.terminal.writeln(`\r\x1b[K\x1b[32mClaude:\x1b[0m ${data.fullText}`);
+        tab.terminal.writeln("");
+        tab.terminal.write("\x1b[36m❯\x1b[0m ");
+      }
 
       saveTabs();
     }

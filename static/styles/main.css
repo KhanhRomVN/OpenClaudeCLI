@@ -969,3 +969,264 @@ body {
 .modal-btn-primary:active {
   transform: scale(0.98);
 }
+
+/* ============================================
+   CLI MODE STYLES
+   ============================================ */
+
+/* Toggle button highlight when in CLI mode */
+.icon-btn.mode-cli {
+  background: rgba(0, 217, 255, 0.1);
+  color: #00d9ff;
+}
+
+/* CLI Mode Container */
+.chat-container[data-mode="cli"] .messages {
+  background: #0a0a0a;
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", "Consolas",
+    monospace;
+  padding: 16px;
+}
+
+/* CLI Mode Messages */
+.chat-container[data-mode="cli"] .message {
+  max-width: 100%;
+  margin-bottom: 12px;
+  animation: none;
+}
+
+.chat-container[data-mode="cli"] .message-content {
+  background: transparent;
+  padding: 4px 0;
+  border-radius: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* User messages - cyan prompt style */
+.chat-container[data-mode="cli"] .message.user .message-content {
+  color: #00d9ff;
+  background: transparent;
+}
+
+.chat-container[data-mode="cli"] .message.user .message-content::before {
+  content: "❯ ";
+  color: #00d9ff;
+  font-weight: bold;
+  margin-right: 4px;
+}
+
+/* Assistant messages - green response style */
+.chat-container[data-mode="cli"] .message.assistant .message-content {
+  color: #50fa7b;
+  background: transparent;
+}
+
+.chat-container[data-mode="cli"] .message.assistant .message-content::before {
+  content: "⟩ ";
+  color: #50fa7b;
+  font-weight: bold;
+  margin-right: 4px;
+}
+
+/* CLI Mode Empty State */
+.chat-container[data-mode="cli"] .empty-state {
+  color: #6272a4;
+  font-family: "SF Mono", "Monaco", monospace;
+}
+
+.chat-container[data-mode="cli"] .empty-state-icon {
+  font-size: 32px;
+  opacity: 0.5;
+}
+
+.chat-container[data-mode="cli"] .empty-state p {
+  color: #6272a4;
+}
+
+.chat-container[data-mode="cli"] .empty-state .hint {
+  color: #44475a;
+}
+
+/* CLI Mode Input */
+.chat-container[data-mode="cli"] .input-wrapper {
+  background: rgba(20, 20, 20, 0.8);
+  border: 1px solid #44475a;
+  border-radius: 8px;
+}
+
+.chat-container[data-mode="cli"] .input-wrapper:focus-within {
+  border-color: #00d9ff;
+  box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+}
+
+.chat-container[data-mode="cli"] #input {
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", "Consolas",
+    monospace;
+  color: #f8f8f2;
+  font-size: 13px;
+}
+
+.chat-container[data-mode="cli"] #input::placeholder {
+  color: #6272a4;
+}
+
+/* CLI Mode Model Selector */
+.chat-container[data-mode="cli"] .model-selector {
+  background: rgba(0, 217, 255, 0.1);
+  border-color: #44475a;
+  color: #00d9ff;
+}
+
+.chat-container[data-mode="cli"] .model-selector:hover {
+  background: rgba(0, 217, 255, 0.15);
+  border-color: #00d9ff;
+}
+
+/* CLI Mode Input Badge */
+.chat-container[data-mode="cli"] .input-badge {
+  background: rgba(0, 217, 255, 0.1);
+  color: #00d9ff;
+  border: 1px solid #44475a;
+}
+
+.chat-container[data-mode="cli"] .input-badge:hover {
+  background: rgba(0, 217, 255, 0.15);
+  border-color: #00d9ff;
+}
+
+/* Scrollbar for CLI mode */
+.chat-container[data-mode="cli"] .messages::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.chat-container[data-mode="cli"] .messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* CLI Mode Buttons */
+.chat-container[data-mode="cli"] .send-btn {
+  background: linear-gradient(145deg, #00d9ff 0%, #00b8d4 100%);
+  box-shadow: 0 2px 6px rgba(0, 217, 255, 0.25);
+}
+
+.chat-container[data-mode="cli"] .send-btn:hover {
+  box-shadow: 0 3px 8px rgba(0, 217, 255, 0.35);
+}
+
+.chat-container[data-mode="cli"] .attach-btn {
+  color: #6272a4;
+}
+
+.chat-container[data-mode="cli"] .attach-btn:hover {
+  background: rgba(98, 114, 164, 0.1);
+  color: #00d9ff;
+}
+
+/* CLI Mode Attachments */
+.chat-container[data-mode="cli"] .attachment-pill {
+  background: rgba(68, 71, 90, 0.3);
+  border-color: #44475a;
+}
+
+.chat-container[data-mode="cli"] .attachment-name {
+  color: #f8f8f2;
+}
+
+.chat-container[data-mode="cli"] .attachment-size {
+  color: #6272a4;
+}
+
+.chat-container[data-mode="cli"] .attachment-icon {
+  color: #00d9ff;
+}
+
+/* ============================================
+   TERMINAL WRAPPER STYLES
+   ============================================ */
+
+.terminal-wrapper {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+  height: 300px;
+  flex-shrink: 0;
+  transition: height 0.3s ease;
+}
+
+.terminal-wrapper.collapsed {
+  height: 36px;
+}
+
+.terminal-wrapper.collapsed .terminal-container {
+  display: none;
+}
+
+.terminal-header {
+  height: 36px;
+  background: rgba(20, 20, 20, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.terminal-header:hover {
+  background: rgba(30, 30, 30, 0.9);
+}
+
+.terminal-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #00d9ff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.terminal-toggle-btn {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #6272a4;
+  transition: all 0.2s;
+}
+
+.terminal-toggle-btn:hover {
+  background: rgba(98, 114, 164, 0.1);
+  color: #00d9ff;
+}
+
+.terminal-wrapper.collapsed .terminal-toggle-btn svg {
+  transform: rotate(-90deg);
+}
+
+.terminal-container {
+  flex: 1;
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* xterm.js overrides */
+.terminal-container .xterm {
+  height: 100%;
+}
+
+.terminal-container .xterm-viewport {
+  background-color: transparent !important;
+}
+
+.terminal-container .xterm-screen {
+  background-color: transparent !important;
+}
