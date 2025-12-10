@@ -337,6 +337,48 @@ function initializeTerminal(tab: ChatTab): void {
   });
 }
 
+function syncMessagesToTerminal(tab: ChatTab): void {
+  if (!tab.terminal) return;
+
+  console.log(
+    `[syncMessagesToTerminal] Syncing ${tab.messages.length} messages to terminal`
+  );
+
+  // Clear terminal first
+  tab.terminal.clear();
+
+  // Write welcome message
+  tab.terminal.writeln(
+    "\x1b[1;36m╔═══════════════════════════════════════════════════════╗\x1b[0m"
+  );
+  tab.terminal.writeln(
+    "\x1b[1;36m║\x1b[0m           \x1b[1;33mZenCLI Terminal - Open Claude\x1b[0m           \x1b[1;36m║\x1b[0m"
+  );
+  tab.terminal.writeln(
+    "\x1b[1;36m╚═══════════════════════════════════════════════════════╝\x1b[0m"
+  );
+  tab.terminal.writeln("");
+
+  // Display each message
+  tab.messages.forEach((msgEl) => {
+    const isUser = msgEl.classList.contains("user");
+    const contentEl = msgEl.querySelector(".message-content");
+    if (!contentEl) return;
+
+    const text = contentEl.textContent || "";
+
+    if (isUser) {
+      tab.terminal!.writeln(`\x1b[33mYou:\x1b[0m ${text}`);
+    } else {
+      tab.terminal!.writeln(`\x1b[32mClaude:\x1b[0m ${text}`);
+    }
+    tab.terminal!.writeln(""); // Empty line between messages
+  });
+
+  // Show prompt
+  tab.terminal.write("\x1b[36m❯\x1b[0m ");
+}
+
 async function handleCLIMessage(tab: ChatTab, message: string): Promise<void> {
   if (!tab.terminal) return;
 
@@ -539,6 +581,12 @@ function renderActiveTab() {
           tab.terminal.resize();
         }
       }, 100);
+    }
+
+    // Sync messages to terminal if there are any
+    if (tab.messages.length > 0) {
+      console.log("[renderActiveTab] Syncing messages to terminal");
+      syncMessagesToTerminal(tab);
     }
   } else {
     // GUI tab: show messages, hide terminal
