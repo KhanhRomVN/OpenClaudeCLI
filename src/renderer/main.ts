@@ -15,6 +15,7 @@ declare global {
         conversationId: string;
         parentMessageUuid: string;
       }>;
+      loadConversation: (convId: string) => Promise<unknown>;
       sendMessage: (
         convId: string,
         message: string,
@@ -85,7 +86,7 @@ interface ChatTab {
   isLoading: boolean;
   streamingElement: HTMLElement | null;
   pendingAttachments: UploadedAttachment[];
-  displayMode: "gui" | "cli";
+  tabType: "gui" | "cli";
   terminal: CLITerminal | null;
 }
 
@@ -132,6 +133,22 @@ interface ToolResultData {
   isError: boolean;
 }
 
+interface ConversationData {
+  uuid: string;
+  name: string;
+  chat_messages: Array<{
+    uuid: string;
+    text: string;
+    sender: "human" | "assistant";
+    created_at: string;
+    attachments?: any[];
+    content?: Array<{
+      type: string;
+      text?: string;
+    }>;
+  }>;
+}
+
 // ============================================
 // CONSTANTS
 // ============================================
@@ -154,6 +171,7 @@ let tabs: ChatTab[] = [];
 let activeTabId: string | null = null;
 let accounts: AccountInfo[] = [];
 let selectedAccountForNewTab: string | null = null;
+let selectedTabType: "gui" | "cli" = "gui";
 
 // ============================================
 // UTILITY FUNCTIONS
@@ -216,9 +234,15 @@ function getActiveTab(): ChatTab | null {
   return tabs.find((t) => t.id === activeTabId) || null;
 }
 
-function createTab(accountId: string, name?: string): ChatTab {
+function createTab(
+  accountId: string,
+  name?: string,
+  tabType: "gui" | "cli" = "gui"
+): ChatTab {
   const tabId = crypto.randomUUID();
-  const tabName = name || `Chat ${tabs.length + 1}`;
+  const tabName =
+    name ||
+    (tabType === "cli" ? `CLI ${tabs.length + 1}` : `Chat ${tabs.length + 1}`);
 
   const tab: ChatTab = {
     id: tabId,
@@ -231,21 +255,24 @@ function createTab(accountId: string, name?: string): ChatTab {
     isLoading: false,
     streamingElement: null,
     pendingAttachments: [],
-    displayMode: "gui",
+    tabType,
     terminal: null,
   };
 
   tabs.push(tab);
   activeTabId = tabId;
 
-  // Initialize terminal for this tab
-  initializeTerminal(tab);
+  // Initialize terminal for CLI tabs
+  if (tabType === "cli") {
+    initializeTerminal(tab);
+  }
 
   renderTabs();
   renderActiveTab();
   saveTabs();
   updateInputBadge();
   updateModelSelector();
+  updateModeToggle();
 
   return tab;
 }
@@ -329,17 +356,28 @@ async function handleCLIMessage(tab: ChatTab, message: string): Promise<void> {
 }
 
 function switchTab(tabId: string) {
-  if (activeTabId === tabId) return;
+  console.log(`[switchTab] Switching to tab: ${tabId}`);
+
+  if (activeTabId === tabId) {
+    console.log("[switchTab] Already on this tab");
+    return;
+  }
 
   const tab = tabs.find((t) => t.id === tabId);
-  if (!tab) return;
+  if (!tab) {
+    console.log("[switchTab] Tab not found");
+    return;
+  }
 
+  console.log(`[switchTab] Tab found: ${tab.name}, type: ${tab.tabType}`);
   activeTabId = tabId;
   renderTabs();
   renderActiveTab();
   updateInputBadge();
   updateModelSelector();
+  updateModeToggle();
   saveTabs();
+  console.log(`[switchTab] Switch complete to ${tab.name}`);
 }
 
 function closeTab(tabId: string) {
@@ -376,31 +414,7 @@ function updateTabName(tabId: string, name: string) {
   saveTabs();
 }
 
-function toggleDisplayMode() {
-  const tab = getActiveTab();
-  if (!tab) return;
-
-  // Toggle mode
-  tab.displayMode = tab.displayMode === "gui" ? "cli" : "gui";
-
-  // Update chat container data attribute
-  const chatContainer = $("chat-container");
-  if (chatContainer) {
-    chatContainer.setAttribute("data-mode", tab.displayMode);
-  }
-
-  // Update toggle button appearance
-  const toggleBtn = $("toggle-mode-btn");
-  if (toggleBtn) {
-    if (tab.displayMode === "cli") {
-      toggleBtn.classList.add("mode-cli");
-    } else {
-      toggleBtn.classList.remove("mode-cli");
-    }
-  }
-
-  saveTabs();
-}
+// Removed toggleDisplayMode - now using separate tab types
 
 // ============================================
 // RENDERING
@@ -457,48 +471,108 @@ function renderTabs() {
 }
 
 function renderActiveTab() {
+  console.log("[renderActiveTab] Function called");
+
   const tab = getActiveTab();
+  console.log(
+    "[renderActiveTab] Active tab:",
+    tab?.name,
+    "type:",
+    tab?.tabType
+  );
+
   const messagesContainer = $("messages");
   const emptyState = $("empty-state");
   const chatContainer = $("chat-container");
-  const terminalContainer = $("terminal-container");
+  const terminalWrapper = $("terminal-wrapper");
 
-  if (!messagesContainer || !emptyState) return;
+  console.log("[renderActiveTab] Elements found:", {
+    messagesContainer: !!messagesContainer,
+    emptyState: !!emptyState,
+    chatContainer: !!chatContainer,
+    terminalWrapper: !!terminalWrapper,
+  });
 
-  // Update chat container mode
-  if (chatContainer && tab) {
-    chatContainer.setAttribute("data-mode", tab.displayMode);
-  }
-
-  // Update toggle button appearance
-  const toggleBtn = $("toggle-mode-btn");
-  if (toggleBtn && tab) {
-    if (tab.displayMode === "cli") {
-      toggleBtn.classList.add("mode-cli");
-    } else {
-      toggleBtn.classList.remove("mode-cli");
-    }
-  }
-
-  // Initialize terminal if not already done
-  if (tab && !tab.terminal && terminalContainer) {
-    initializeTerminal(tab);
-  }
-
-  // Clear current messages
-  messagesContainer.innerHTML = "";
-
-  if (!tab || tab.messages.length === 0) {
-    messagesContainer.appendChild(emptyState);
+  // Only require messagesContainer and chatContainer (emptyState only needed for GUI mode)
+  if (!messagesContainer || !chatContainer) {
+    console.log(
+      "[renderActiveTab] Missing required elements (messagesContainer or chatContainer), exiting"
+    );
     return;
   }
 
-  // Render tab's messages
-  tab.messages.forEach((msg) => {
-    messagesContainer.appendChild(msg.cloneNode(true));
-  });
+  if (!tab) {
+    console.log("[renderActiveTab] No active tab, exiting");
+    return;
+  }
 
-  scrollToBottom();
+  console.log("[renderActiveTab] Tab type:", tab.tabType);
+
+  // Show/hide based on tab type
+  if (tab.tabType === "cli") {
+    // CLI tab: hide messages, show terminal
+    console.log("[renderActiveTab] Switching to CLI mode");
+    console.log("[renderActiveTab] Setting messagesContainer display to none");
+    messagesContainer.style.display = "none";
+
+    if (terminalWrapper) {
+      console.log("[renderActiveTab] Setting terminalWrapper display to flex");
+      terminalWrapper.style.display = "flex";
+      terminalWrapper.classList.remove("collapsed");
+      console.log(
+        "[renderActiveTab] Terminal wrapper display:",
+        terminalWrapper.style.display
+      );
+    } else {
+      console.log("[renderActiveTab] WARNING: terminalWrapper not found!");
+    }
+
+    // Initialize terminal if not already done
+    if (!tab.terminal) {
+      console.log("[renderActiveTab] Initializing terminal");
+      initializeTerminal(tab);
+    } else {
+      // Resize existing terminal
+      console.log("[renderActiveTab] Resizing existing terminal");
+      setTimeout(() => {
+        if (tab.terminal) {
+          tab.terminal.resize();
+        }
+      }, 100);
+    }
+  } else {
+    // GUI tab: show messages, hide terminal
+    console.log("[renderActiveTab] Switching to GUI mode");
+    console.log("[renderActiveTab] Setting messagesContainer display to flex");
+    messagesContainer.style.display = "flex";
+
+    if (terminalWrapper) {
+      console.log("[renderActiveTab] Setting terminalWrapper display to none");
+      terminalWrapper.style.display = "none";
+      console.log(
+        "[renderActiveTab] Terminal wrapper display:",
+        terminalWrapper.style.display
+      );
+    }
+
+    // Clear and render messages
+    messagesContainer.innerHTML = "";
+
+    if (tab.messages.length === 0) {
+      // Only append emptyState if it exists
+      if (emptyState) {
+        messagesContainer.appendChild(emptyState);
+      }
+    } else {
+      // Render tab's messages
+      tab.messages.forEach((msg) => {
+        messagesContainer.appendChild(msg.cloneNode(true));
+      });
+      scrollToBottom();
+    }
+  }
+
+  console.log("[renderActiveTab] Function completed");
 }
 
 function updateInputBadge() {
@@ -516,6 +590,35 @@ function updateModelSelector() {
 
   if (modelSelector && tab) {
     modelSelector.value = tab.model;
+  }
+}
+
+function updateModeToggle() {
+  const tab = getActiveTab();
+  if (!tab) {
+    console.log("[updateModeToggle] No active tab");
+    return;
+  }
+
+  console.log(
+    `[updateModeToggle] Updating toggle for tab type: ${tab.tabType}`
+  );
+
+  const guiBtn = document.querySelector('.mode-toggle-btn[data-mode="gui"]');
+  const cliBtn = document.querySelector('.mode-toggle-btn[data-mode="cli"]');
+
+  if (guiBtn && cliBtn) {
+    if (tab.tabType === "gui") {
+      console.log("[updateModeToggle] Setting GUI button active");
+      guiBtn.classList.add("active");
+      cliBtn.classList.remove("active");
+    } else {
+      console.log("[updateModeToggle] Setting CLI button active");
+      guiBtn.classList.remove("active");
+      cliBtn.classList.add("active");
+    }
+  } else {
+    console.log("[updateModeToggle] Toggle buttons not found!");
   }
 }
 
@@ -604,6 +707,108 @@ function addMessage(
   }
 
   return el;
+}
+
+// ============================================
+// CONVERSATION HISTORY
+// ============================================
+
+async function loadConversationHistory(tab: ChatTab): Promise<void> {
+  if (!tab.conversationId || tab.messages.length > 0) {
+    return; // Already has messages or no conversation
+  }
+
+  console.log(
+    `[History] Loading conversation history for: ${tab.conversationId}`
+  );
+
+  try {
+    const data = (await window.claude.loadConversation(
+      tab.conversationId
+    )) as ConversationData;
+
+    console.log("[History] Raw API response:", data);
+    console.log("[History] Response keys:", Object.keys(data || {}));
+
+    if (!data) {
+      console.log("[History] No data returned from API");
+      return;
+    }
+
+    // Check different possible message field names
+    const messages =
+      data.chat_messages ||
+      (data as any).messages ||
+      (data as any).chat_history;
+
+    console.log("[History] Messages field:", messages);
+    console.log("[History] Messages type:", typeof messages);
+    console.log("[History] Is array:", Array.isArray(messages));
+
+    if (!messages || !Array.isArray(messages)) {
+      console.log("[History] No messages found in conversation");
+      console.log("[History] Available fields:", Object.keys(data));
+      return;
+    }
+
+    console.log(`[History] Found ${messages.length} messages`);
+
+    // Sort messages by creation time (oldest first)
+    const sortedMessages = [...messages].sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    // Render each message
+    for (const msg of sortedMessages) {
+      // Extract text from content array
+      let messageText = msg.text || "";
+
+      // If text is empty, try to extract from content array
+      if (!messageText && msg.content && Array.isArray(msg.content)) {
+        const textParts: string[] = [];
+        for (const contentBlock of msg.content) {
+          if (contentBlock.type === "text" && contentBlock.text) {
+            textParts.push(contentBlock.text);
+          }
+        }
+        messageText = textParts.join("\n");
+      }
+
+      console.log("[History] Processing message:", {
+        sender: msg.sender,
+        text: messageText?.substring(0, 50),
+        hasContent: !!msg.content,
+      });
+
+      if (!messageText) {
+        console.log("[History] Skipping message with no text content");
+        continue;
+      }
+
+      if (msg.sender === "human") {
+        addMessage("user", messageText);
+      } else if (msg.sender === "assistant") {
+        addMessage("assistant", messageText);
+      }
+    }
+
+    // Update parent message UUID to the last message
+    if (sortedMessages.length > 0) {
+      const lastMessage = sortedMessages[sortedMessages.length - 1];
+      tab.parentMessageUuid = lastMessage.uuid;
+      console.log(`[History] Updated parent message UUID: ${lastMessage.uuid}`);
+    }
+
+    // Update tab name if conversation has a name
+    if (data.name && data.name.trim()) {
+      updateTabName(tab.id, data.name);
+    }
+
+    console.log("[History] Successfully loaded conversation history");
+  } catch (error) {
+    console.error("[History] Failed to load conversation history:", error);
+  }
 }
 
 // ============================================
@@ -798,7 +1003,7 @@ function saveTabs() {
     conversationId: tab.conversationId,
     parentMessageUuid: tab.parentMessageUuid,
     model: tab.model,
-    displayMode: tab.displayMode,
+    tabType: tab.tabType,
   }));
 
   localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(tabsData));
@@ -812,7 +1017,22 @@ async function restoreTabs() {
   if (tabsData) {
     try {
       const parsed = JSON.parse(tabsData);
+      console.log("[restoreTabs] Restoring tabs:", parsed);
+
       for (const tabData of parsed) {
+        // Migration: handle old displayMode field
+        let tabType: "gui" | "cli" = "gui";
+        if (tabData.tabType) {
+          tabType = tabData.tabType;
+        } else if (tabData.displayMode) {
+          // Migrate from old displayMode field
+          tabType = tabData.displayMode;
+        }
+
+        console.log(
+          `[restoreTabs] Restoring tab ${tabData.name} with type: ${tabType}`
+        );
+
         const tab: ChatTab = {
           id: tabData.id,
           name: tabData.name,
@@ -824,7 +1044,7 @@ async function restoreTabs() {
           isLoading: false,
           streamingElement: null,
           pendingAttachments: [],
-          displayMode: tabData.displayMode || "gui",
+          tabType,
           terminal: null,
         };
         tabs.push(tab);
@@ -836,7 +1056,7 @@ async function restoreTabs() {
         activeTabId = tabs[0].id;
       }
     } catch (e) {
-      console.error("Failed to restore tabs:", e);
+      console.error("[restoreTabs] Failed to restore tabs:", e);
     }
   }
 
@@ -851,6 +1071,16 @@ async function restoreTabs() {
     renderActiveTab();
     updateInputBadge();
     updateModelSelector();
+
+    // Auto-load conversation history for tabs with conversationId
+    for (const tab of tabs) {
+      if (tab.conversationId && tab.messages.length === 0) {
+        await loadConversationHistory(tab);
+      }
+    }
+
+    // Re-render active tab after loading history
+    renderActiveTab();
   }
 }
 
@@ -890,8 +1120,20 @@ function setupEventListeners() {
   const newTabBtn = $("new-tab-btn");
   newTabBtn?.addEventListener("click", () => {
     if (canCreateNewTab()) {
+      selectedTabType = "gui"; // Reset to GUI by default
       showAccountSelectModal();
     }
+  });
+
+  // Tab type selector buttons
+  document.querySelectorAll(".tab-type-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document
+        .querySelectorAll(".tab-type-btn")
+        .forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      selectedTabType = (btn as HTMLElement).dataset.type as "gui" | "cli";
+    });
   });
 
   // Account selection modal
@@ -904,7 +1146,7 @@ function setupEventListeners() {
   const addAccountForTab = $("add-account-for-tab");
   addAccountForTab?.addEventListener("click", async () => {
     if (selectedAccountForNewTab) {
-      createTab(selectedAccountForNewTab);
+      createTab(selectedAccountForNewTab, undefined, selectedTabType);
       hideAccountSelectModal();
     } else {
       // Add new account
@@ -944,6 +1186,42 @@ function setupEventListeners() {
     }
   });
 
+  // Mode toggle buttons
+  document.querySelectorAll(".mode-toggle-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      console.log("[mode-toggle] Button clicked");
+      const tab = getActiveTab();
+      if (!tab) {
+        console.log("[mode-toggle] No active tab");
+        return;
+      }
+
+      const mode = (btn as HTMLElement).dataset.mode as "gui" | "cli";
+      console.log(
+        `[mode-toggle] Current tab type: ${tab.tabType}, Requested mode: ${mode}`
+      );
+
+      if (tab.tabType !== mode) {
+        console.log(`[mode-toggle] Switching from ${tab.tabType} to ${mode}`);
+        tab.tabType = mode;
+        console.log(`[mode-toggle] Tab type updated to: ${tab.tabType}`);
+        console.log("[mode-toggle] Calling renderActiveTab...");
+        renderActiveTab();
+        console.log("[mode-toggle] renderActiveTab completed");
+        console.log("[mode-toggle] Calling updateModeToggle...");
+        updateModeToggle();
+        console.log("[mode-toggle] updateModeToggle completed");
+        console.log("[mode-toggle] Saving tabs...");
+        saveTabs();
+        console.log(
+          `[mode-toggle] Switch complete, tab type is now: ${tab.tabType}`
+        );
+      } else {
+        console.log(`[mode-toggle] Already in ${mode} mode, no change needed`);
+      }
+    });
+  });
+
   // Input
   const input = $("input") as HTMLTextAreaElement;
   input?.addEventListener("input", () => autoResize(input));
@@ -980,13 +1258,9 @@ function setupEventListeners() {
     }
   });
 
-  // Toggle mode button
-  const toggleModeBtn = $("toggle-mode-btn");
-  toggleModeBtn?.addEventListener("click", () => {
-    toggleDisplayMode();
-  });
+  // Removed toggle mode button - now using separate tab types
 
-  // Terminal toggle button
+  // Terminal toggle button (for CLI tabs)
   const terminalToggleBtn = $("terminal-toggle-btn");
   const terminalWrapper = $("terminal-wrapper");
   terminalToggleBtn?.addEventListener("click", (e) => {
