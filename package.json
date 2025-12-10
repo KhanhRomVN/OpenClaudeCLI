@@ -1,0 +1,71 @@
+{
+  "name": "open-claude",
+  "productName": "Open Claude",
+  "version": "1.0.0",
+  "description": "Open Claude - A custom Claude client",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc && npm run build:renderer",
+    "build:renderer": "esbuild src/renderer/main.ts --bundle --outfile=static/js/main.js --format=esm --platform=browser && esbuild src/renderer/spotlight.ts --bundle --outfile=static/js/spotlight.js --format=esm --platform=browser && esbuild src/renderer/settings.ts --bundle --outfile=static/js/settings.js --format=esm --platform=browser",
+    "start": "npm run build && electron . --no-sandbox",
+    "dev": "npm run build && electron . --no-sandbox",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
+  },
+  "build": {
+    "appId": "com.openclaude.app",
+    "productName": "Open Claude",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "static/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Open Claude",
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "electron-store": "^11.0.2",
+    "marked": "^17.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "electron": "^39.2.6",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.27.1",
+    "typescript": "^5.9.3"
+  }
+}

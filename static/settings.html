@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings</title>
+  <link rel="stylesheet" href="styles/settings.css">
+</head>
+<body>
+  <div class="settings-container">
+    <div class="settings-header">
+      <h1>Settings</h1>
+    </div>
+
+    <div class="settings-content">
+      <!-- Spotlight Section -->
+      <div class="settings-section">
+        <h2>Spotlight</h2>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <label>Keyboard Shortcut</label>
+            <span class="setting-description">Global shortcut to open spotlight</span>
+          </div>
+          <div class="keybind-input" id="keybind-input" tabindex="0">
+            <span class="keybind-display" id="keybind-display">⌘ + Shift + Space</span>
+            <span class="keybind-hint">Click to change</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <label>Persist History</label>
+            <span class="setting-description">Keep spotlight chat history after closing</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="persist-history">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- About Section -->
+      <div class="settings-section">
+        <h2>About</h2>
+        <div class="about-info">
+          <div class="about-row">
+            <span class="about-label">Version</span>
+            <span class="about-value" id="app-version">1.0.0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/settings.js"></script>
+</body>
+</html>
